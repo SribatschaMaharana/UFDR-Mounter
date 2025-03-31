@@ -7,9 +7,9 @@ Made for integration with RescueBox (UMass Amherst · Spring 2025).
 
 # UFDR
 
-A `.ufdr` file is a Cellebrite forensic export that combines an XML metadata blob and a ZIP archive of file contents. This project allows you to mount both:
-- The ZIP portion as a virtual file structure
-- The pre-ZIP XML data as a virtual `metadata.xml` file
+A `.ufdr` file is a Cellebrite forensic export that combines an XML metadata blob and a ZIP archive of file contents. This project allows you to mount The ZIP portion as a virtual file structure.
+
+(Note, at this moment the project only works with .zip files)
 
 ## Installation, Setup and Usage
 
@@ -53,7 +53,7 @@ Go to System Settings → Privacy & Security → Full Disk Access, and give macF
 
 ```bash
 mkdir mnt
-./mount.py <path_to.ufdr or .zip> mnt
+./mount.py <path_to.zip> mnt
 ```
 You must create a fresh mountpoint folder every time.
 
