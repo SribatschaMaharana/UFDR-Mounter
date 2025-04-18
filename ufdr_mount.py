@@ -7,6 +7,7 @@ import logging
 import signal
 import subprocess
 import errno
+import platform
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -22,11 +23,14 @@ def handle_exit(signum, frame):
     if MOUNT_DIR and os.path.ismount(MOUNT_DIR):
         print(f"\nUnmounting {MOUNT_DIR}...")
         try:
-            # On macOS, attempt diskutil first
-            subprocess.run(["diskutil", "unmount", MOUNT_DIR], check=False, timeout=5)
-        except (FileNotFoundError, subprocess.SubprocessError):
-            # Fallback: use umount
-            subprocess.run(["umount", MOUNT_DIR], check=False)
+            if platform.system() == "Darwin":
+                subprocess.run(["diskutil", "unmount", MOUNT_DIR], check=False, timeout=5)
+            elif platform.system() == "Linux":
+                subprocess.run(["fusermount", "-u", MOUNT_DIR], check=False)
+            else:
+                print("Unsupported OS for auto-unmount.")
+        except Exception as e:
+            log.warning(f"Failed to unmount: {e}")
     sys.exit(0)
 
 
