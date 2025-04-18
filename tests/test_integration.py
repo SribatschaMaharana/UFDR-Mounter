@@ -57,8 +57,9 @@ def test_integration_basic():
 
         # Check that something is mounted at mount_dir
         # On macOS or Linux, 'mount' command should list the mount point
-        mount_output = subprocess.check_output(["mount"]).decode("utf-8")
-        assert mount_dir in mount_output, f"Mount point {mount_dir} not found in system mounts"
+        with open("/proc/mounts", "r") as f:
+            mounts = f.read()
+        assert mount_dir in mounts, f"Mount point {mount_dir} not found in /proc/mounts"
 
         # Check the files we expect
         # The script always creates 'metadata.xml', plus any ZIP entries
@@ -84,8 +85,10 @@ def test_integration_basic():
         proc.wait(timeout=5)
 
         # Verify it's no longer mounted
-        mount_output_after = subprocess.check_output(["mount"]).decode("utf-8")
-        assert mount_dir not in mount_output_after, "Mount directory still present after killing the process"
+        with open("/proc/mounts", "r") as f:
+            mounts_after = f.read()
+        assert mount_dir not in mounts_after, "Mount directory still present after killing the process"
+
 
 
 @pytest.mark.integration
