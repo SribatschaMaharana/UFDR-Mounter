@@ -14,12 +14,13 @@ def get_gid():
     if platform.system() == "Windows":
         return 1000  # Dummy 
     return os.getgid()
-
+        
 def validate_mount_point(mount_point: str):
     system = platform.system()
     if system == "Windows":
-        if not (len(mount_point) == 2 and mount_point[1] == ":" and mount_point[0].isalpha()):
-            raise ValueError("On Windows, mount point must be a drive letter like 'M:'.")
+        # Normalize 'M:' or 'M:\' and check the first two characters
+        if not (mount_point[0].isalpha() and mount_point[1] == ":" and len(mount_point) >= 2):
+            raise ValueError("On Windows, mount point must be a drive letter like 'M:'")
     else:
         if not os.path.exists(mount_point):
             os.makedirs(mount_point)
