@@ -14,7 +14,7 @@ from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# Global so our signal handler can unmount if needed
+# sig handler can unmount if needed
 MOUNT_DIR = None
 
 
@@ -34,7 +34,7 @@ def handle_exit(signum, frame):
     sys.exit(0)
 
 
-# Attach our signal handler for Ctrl+C, kill, etc.
+# attach sig handler
 signal.signal(signal.SIGINT, handle_exit)
 signal.signal(signal.SIGTERM, handle_exit)
 
@@ -59,7 +59,7 @@ class UFDRMount(LoggingMixIn, Operations):
         self.files_info = {}  # path -> dict of metadata
         self.dirs = set()     # set of directory paths
 
-        # Ensure we parse the .ufdr structure
+        # ensure we parse the .ufdr structure
         self._parse_ufdr()
 
     def _parse_ufdr(self):
@@ -77,40 +77,36 @@ class UFDRMount(LoggingMixIn, Operations):
             if self.zip_offset < 0:
                 raise RuntimeError("No ZIP signature found in UFDR file.")
 
-            # The bytes before the ZIP are our 'metadata.xml'
+            # The bytes before the ZIP is 'metadata.xml'
             self.xml_data = head[: self.zip_offset]
-            # Potentially, if the XML is bigger than 16KB, you might read further,
-            # but usually UFDR XML is small enough to fit in that chunk.
 
             log.info(f"Found ZIP at offset {self.zip_offset}. Metadata size: {len(self.xml_data)}")
-
-            # Move file pointer to start of ZIP
             f.seek(self.zip_offset)
 
-            # Now read the ZIP structure
+            # read the ZIP 
             with zipfile.ZipFile(f, "r") as z:
                 all_items = z.infolist()
                 log.info(f"ZIP has {len(all_items)} entries")
 
-                # We'll track directories separately. We'll create the root dir "/".
+                # track directories separately
                 self.dirs.add("/")
                 for info in all_items:
-                    # If it's a directory, record it in self.dirs.
+                    # If a directory, record it in self.dirs.
                     if info.is_dir() or info.filename.endswith("/"):
                         dirpath = "/" + info.filename.rstrip("/")
                         self.dirs.add(dirpath)
                     else:
-                        # It's a file
+                        # file
                         filepath = "/" + info.filename
                         self.files_info[filepath] = {
                             "filename": info.filename,
                             "size": info.file_size,
                             "mtime": info.date_time,
                         }
-                        # Mark any parent directories
+                        # Mark parent directories
                         self._ensure_parents(filepath)
 
-                # Also add our 'metadata.xml' as a pseudo-file
+                # add 'metadata.xml' as a pseudo-file
                 self.files_info["/metadata.xml"] = {
                     "filename": None,  # indicates it's not in the ZIP
                     "size": len(self.xml_data),
@@ -132,9 +128,8 @@ class UFDRMount(LoggingMixIn, Operations):
 
     def getattr(self, path, fh=None):
         """
-        Return file/dir metadata. If path is in our dirs, treat it as a directory;
+        Return file/dir metadata. If path is in dirs, treat it as a directory;
         if path is in files_info, treat it as a file; else fallback check on disk
-        (though normally the UFDR is a single file).
         """
         log.debug(f"getattr({path})")
 
@@ -150,20 +145,19 @@ class UFDRMount(LoggingMixIn, Operations):
             size = self.files_info[path]["size"]
             return self._make_file_stat(size)
 
-        # If there's some fallback? Usually not needed, but you can implement
-        # a real file check if you want. We'll just say ENOENT.
+        # If there's some fallback? 
         raise FuseOSError(errno.ENOENT)
 
     def readdir(self, path, fh):
         """
-        List children for a directory. We'll find immediate subpaths
+        List children for a directory. find immediate subpaths
         that share our directory prefix (plus one level).
         """
         log.debug(f"readdir({path})")
         # '.' and '..' are standard
         entries = [".", ".."]
 
-        # At root, anything that is top-level (like "/something")
+        # At root, anything that is top-level "/something"
         # If at "/dir", then we want the next segment after "/dir/"
         prefix = path
         if not prefix.endswith("/"):
@@ -173,8 +167,6 @@ class UFDRMount(LoggingMixIn, Operations):
         # 1) Child directories
         for d in self.dirs:
             if d.startswith(prefix) and d != path:
-                # Example: path="/foo", prefix="/foo/", d="/foo/bar"
-                # We'll extract "bar"
                 suffix = d[len(prefix) :]
                 if "/" not in suffix:  # direct child, not deeper subdir
                     entries.append(suffix)
@@ -219,11 +211,10 @@ class UFDRMount(LoggingMixIn, Operations):
                     return zf.read(size)
 
     def open(self, path, flags):
-        """We don't do real file handles, so return a dummy integer."""
         log.debug(f"open({path}, flags={flags})")
         if path not in self.files_info and path not in self.dirs:
             raise FuseOSError(errno.ENOENT)
-        # 0 is a dummy handle
+        # 0 dummy handle
         return 0
 
     ### HELPERS
@@ -235,7 +226,7 @@ class UFDRMount(LoggingMixIn, Operations):
         Fake them as needed, or read from your system if you prefer.
         """
         import time
-        # We'll just set times to "now" for demonstration
+        # set time to now
         now = int(time.time())
         return {
             "st_mode": 0o100444,  # Regular file, read-only
@@ -256,7 +247,7 @@ class UFDRMount(LoggingMixIn, Operations):
         import time
         now = int(time.time())
         return {
-            "st_mode": 0o040555,  # Directory, read/execute
+            "st_mode": 0o040555,  # directory, read/execute
             "st_size": 0,
             "st_uid": os.getuid(),
             "st_gid": os.getgid(),
@@ -287,7 +278,7 @@ def main():
     print("Press Ctrl+C to unmount and exit.")
 
     # FUSE in foreground
-    fuse = FUSE(UFDRMount(ufdr_file), MOUNT_DIR, foreground=True, ro=True, allow_other=False)
+    fuse = FUSE(UFDRMount(ufdr_file), MOUNT_DIR, foreground=True, ro=True, allow_other=True)
 
 
 if __name__ == "__main__":
