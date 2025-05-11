@@ -54,15 +54,15 @@ Create a new virtual environment using any tool you prefer.
 If you prefer using **Conda**, create and activate your environment with:
 
 ```bash
-conda create --name myenv python=3.12
-conda activate myenv
+conda create --name ufdr-env python=3.12
+conda activate ufdr-env
 ```
 
 #### Option 2: Using venv
 ```bash
-python -m venv venv
-source venv/bin/activate  # For Mac/Linux
-venv\Scripts\activate  # For Windows
+python -m venv ufdr-env
+source ufdr-env/bin/activate  # For Mac/Linux
+ufdr-env\Scripts\activate  # For Windows
 ```
 
 ### 4. Install Dependencies
