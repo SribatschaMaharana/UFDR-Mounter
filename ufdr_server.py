@@ -24,8 +24,10 @@ class UFDRParameters(TypedDict):
 
 # mount function 
 def mount_in_background(ufdr_path, mount_path):
-    FUSE(UFDRMount(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
-
+    try:
+        FUSE(UFDRMount(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
+    except Exception as e:
+        print(f"[ERROR] Mount thread failed: {e}")
 
 def get_mount_path(mount_name: str) -> str:
     mount_name = mount_name.strip()
