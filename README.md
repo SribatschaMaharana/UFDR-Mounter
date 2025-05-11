@@ -81,15 +81,16 @@ The server will run on http://127.0.0.1:5000 by default.
 ## Usage
 
 ### Using the Frontend (RescueBox)
-- Open the RescueBox interface.
-- Register the model with the server's IP address (127.0.0.1) and port (5000).
-- Upload the .UFDR file to the UFDR Mounter Service interface as input
-- Specify the mount point: 
-Linux/MacOS: Use an absolute path (e.g., /mnt/test1) or a short name like test1 (which will be mounted inside the repo's mnt/ folder)
 
-in Windows - Enter a valid drive letter, like M: or R: but not a drive currently in use by your filesystem (like C: or D:)
-
-
+1. Open the RescueBox interface.
+2. Register the model with the server's IP address (`127.0.0.1`) and port (`5000`).
+3. Upload the `.ufdr` file to the **UFDR Mounter Service** interface.
+4. Specify the mount point:
+   - **Linux/macOS**:  
+     Use an absolute path (e.g., `/mnt/test1`)  
+     or a short name like `test1` (which will be mounted inside the repo's `mnt/` folder).
+   - **Windows**:  
+     Enter a valid **drive letter** (e.g., `M:` or `R:`) as the mount point.
 
 #### Registering
 
