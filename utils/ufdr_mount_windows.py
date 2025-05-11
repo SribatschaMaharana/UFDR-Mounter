@@ -8,6 +8,7 @@ import logging
 import signal
 import errno
 import time
+import platform
 
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
@@ -178,6 +179,9 @@ class UFDRMount(LoggingMixIn, Operations):
 
 def handle_exit(signum, frame):
     print("\nReceived signal, exiting...")
+    # Try to unmount if it's still running (best effort)
+    if platform.system() == "Windows":
+        print("Unmount manually if needed (Windows does not support auto-unmount via signal).")
     sys.exit(0)
 
 def main():

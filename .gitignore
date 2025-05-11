@@ -1,0 +1,10 @@
+# Ignore Python bytecode
+__pycache__/
+*.py[cod]
+
+# macOS system file
+.DS_Store
+
+# Ignore virtual environments 
+.env/
+venv/
