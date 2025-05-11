@@ -1,17 +1,16 @@
 import os
 import time
 import threading
+import platform
 
 from utils import UFDRMount
-
+from fuse import FUSE
+from typing import TypedDict
 from flask_ml.flask_ml_server import MLServer
 from flask_ml.flask_ml_server.models import (
     FileInput, TextInput, InputSchema, InputType,
     TextResponse, ResponseBody, TaskSchema
 )
-from typing import TypedDict
-
-from fuse import FUSE
 
 server = MLServer(__name__)
 APP_NAME = "ufdr-mounter"
@@ -27,12 +26,11 @@ class UFDRParameters(TypedDict):
 def mount_in_background(ufdr_path, mount_path):
     FUSE(UFDRMount(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
 
+
 def get_mount_path(mount_name: str) -> str:
     mount_name = mount_name.strip()
-    # if already a path, use directly
-    if os.path.isabs(mount_name):
+    if os.path.isabs(mount_name) or (platform.system() == "Windows" and len(mount_name) == 2 and mount_name[1] == ":"):
         return mount_name
-    # otherwise, mount relative under ./mnt/
     return os.path.abspath(os.path.join("mnt", mount_name))
 
 
@@ -56,9 +54,10 @@ def ufdr_task_schema() -> TaskSchema:
 def mount_task(inputs: UFDRInputs, parameters: UFDRParameters) -> ResponseBody:
     ufdr_path = inputs["ufdr_file"].path
     mount_name = inputs["mount_name"].text.strip()
-    mount_path = os.path.abspath(f"./mnt/{mount_name}")
+    mount_path = get_mount_path(mount_name)
 
-    os.makedirs(mount_path, exist_ok=True)
+    if not (platform.system() == "Windows" and len(mount_path) == 2 and mount_path[1] == ":"):
+        os.makedirs(mount_path, exist_ok=True)
 
     t = threading.Thread(target=mount_in_background, args=(ufdr_path, mount_path), daemon=True)
     t.start()
@@ -75,4 +74,3 @@ def mount_task(inputs: UFDRInputs, parameters: UFDRParameters) -> ResponseBody:
 
 if __name__ == "__main__":
     server.run()
-
