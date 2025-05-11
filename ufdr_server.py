@@ -27,6 +27,15 @@ class UFDRParameters(TypedDict):
 def mount_in_background(ufdr_path, mount_path):
     FUSE(UFDRMount(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
 
+def get_mount_path(mount_name: str) -> str:
+    mount_name = mount_name.strip()
+    # if already a path, use directly
+    if os.path.isabs(mount_name):
+        return mount_name
+    # otherwise, mount relative under ./mnt/
+    return os.path.abspath(os.path.join("mnt", mount_name))
+
+
 server.add_app_metadata(
     name="UFDR Mount Service",
     author="Sribatscha Maharana",
