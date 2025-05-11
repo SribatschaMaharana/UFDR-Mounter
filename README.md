@@ -9,7 +9,7 @@ Made for integration with RescueBox (UMass Amherst · Spring 2025).
 
 A `.ufdr` file is a Cellebrite forensic export that combines an XML metadata blob and a ZIP archive of file contents. This project allows you to mount The ZIP portion as a virtual file structure.
 
-## Installation ad Setup
+## Installation and Setup
 
 ### 1. Clone the Repository:
 ```bash
