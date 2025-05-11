@@ -86,6 +86,7 @@ The server will run on http://127.0.0.1:5000 by default.
 - Upload the .UFDR file to the UFDR Mounter Service interface as input
 - Specify the mount point: 
 Linux/MacOS: Use an absolute path (e.g., /mnt/test1) or a short name like test1 (which will be mounted inside the repo's mnt/ folder)
+
 in Windows - Enter a valid drive letter, like M: or R: but not a drive currently in use by your filesystem (like C: or D:)
 
 
