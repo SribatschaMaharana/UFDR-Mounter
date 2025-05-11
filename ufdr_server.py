@@ -2,9 +2,7 @@ import os
 import time
 import threading
 
-import platform
-from utils.ufdr_mount_unix import UFDRMount as UnixUFDRMount
-from utils.ufdr_mount_windows import UFDRMount as WindowsUFDRMount
+from utils import UFDRMount
 
 from flask_ml.flask_ml_server import MLServer
 from flask_ml.flask_ml_server.models import (
@@ -27,9 +25,8 @@ class UFDRParameters(TypedDict):
 
 # mount function 
 def mount_in_background(ufdr_path, mount_path):
-    MountClass = WindowsUFDRMount if platform.system() == "Windows" else UnixUFDRMount
-    FUSE(MountClass(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
-    
+    FUSE(UFDRMount(ufdr_path), mount_path, foreground=True, ro=True, allow_other=True)
+
 server.add_app_metadata(
     name="UFDR Mount Service",
     author="Sribatscha Maharana",
