@@ -184,7 +184,7 @@ class UFDRMount(LoggingMixIn, Operations):
         """
         Return the requested slice of data from either:
          - The 'metadata.xml' chunk
-         - The ZIP content (by seeking to zip_offset and reading from the embedded file)
+         - The ZIP content 
         """
         log.debug(f"read({path}, size={size}, offset={offset})")
 
@@ -223,7 +223,6 @@ class UFDRMount(LoggingMixIn, Operations):
     def _make_file_stat(size):
         """
         Returns a dict of typical st_ fields for a read-only file.
-        Fake them as needed, or read from your system if you prefer.
         """
         import time
         # set time to now
