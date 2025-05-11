@@ -6,7 +6,7 @@ import platform
 from utils import UFDRMount
 from fuse import FUSE
 from typing import TypedDict
-from flask_ml.flask_ml_server import MLServer
+from flask_ml.flask_ml_server import MLServer, load_file_as_string
 from flask_ml.flask_ml_server.models import (
     FileInput, TextInput, InputSchema, InputType,
     TextResponse, ResponseBody, TaskSchema
@@ -38,7 +38,7 @@ server.add_app_metadata(
     name="UFDR Mount Service",
     author="Sribatscha Maharana",
     version="1.0.0",
-    info="Mounts a UFDR file using FUSE and returns status."
+    info=load_file_as_string("ufdr-app-info.md")
 )
 
 def ufdr_task_schema() -> TaskSchema:
@@ -66,7 +66,7 @@ def mount_task(inputs: UFDRInputs, parameters: UFDRParameters) -> ResponseBody:
 
     try:
         contents = os.listdir(mount_path)
-        msg = f"Mounted at {mount_path}. Contents: {contents[:5]}"
+        msg = f"Mounted at {mount_path}"
     except Exception as e:
         msg = f"Mount failed: {e}"
 
