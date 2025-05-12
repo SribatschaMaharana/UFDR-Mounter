@@ -35,6 +35,12 @@ def get_mount_path(mount_name: str) -> str:
         return mount_name
     return os.path.abspath(os.path.join("mnt", mount_name))
 
+def wait_for_mount(path, timeout=10):
+    for _ in range(timeout * 10):
+        if os.path.ismount(path):
+            return True
+        time.sleep(0.1)
+    return False
 
 server.add_app_metadata(
     name="UFDR Mount Service",
@@ -64,8 +70,9 @@ def mount_task(inputs: UFDRInputs, parameters: UFDRParameters) -> ResponseBody:
     t = threading.Thread(target=mount_in_background, args=(ufdr_path, mount_path), daemon=True)
     t.start()
 
-    time.sleep(3)  # give FUSE time to mount
-
+    # give FUSE time to mount
+    if not wait_for_mount(mount_path, timeout=10):
+        return ResponseBody(root=TextResponse(value="Mount failed: Timeout waiting for FUSE mount", title="Mount Result"))
     try:
         contents = os.listdir(mount_path)
         msg = f"Mounted at {mount_path}"
