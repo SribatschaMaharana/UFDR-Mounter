@@ -75,7 +75,7 @@ pip install -r requirements.txt
 pip install flask-ml
 ```
 
-### 5. Run the mounter service
+### 6. Run the mounter service
 
 Run the mount server:
 ```bash
