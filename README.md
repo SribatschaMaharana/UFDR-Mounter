@@ -69,6 +69,11 @@ ufdr-env\Scripts\activate  # For Windows
 ```bash
 pip install -r requirements.txt
 ```
+### 5. Install flask-ml
+
+```bash
+pip install flask-ml
+```
 
 ### 5. Run the mounter service
 
