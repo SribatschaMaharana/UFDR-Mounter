@@ -1,285 +1,181 @@
-#!/usr/bin/env python3
-
-import os
+import os #imports os for filesystem calls
 import sys
-import zipfile
-import logging
+import zipfile #imports zipfile for zip archive reading
 import signal
 import subprocess
 import errno
-import platform
+import platform #for os detection
 
-from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
+from fuse import FUSE, FuseOSError, Operations
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+mountDir = None #global var to store mount point
 
-# sig handler can unmount if needed
-MOUNT_DIR = None
-
-
-def handle_exit(signum, frame):
-    """Gracefully unmount on Ctrl+C or kill."""
-    if MOUNT_DIR and os.path.ismount(MOUNT_DIR):
-        print(f"\nUnmounting {MOUNT_DIR}...")
+def handle_exit(signum, frame): #this function handles termination when CTRL+C occurs
+    if mountDir and os.path.ismount(mountDir): #checks if mountDir is a valid path and is currently an active mount point
+        print(f"\nUnmounting {mountDir} as program was terminated.")
         try:
             if platform.system() == "Darwin":
-                subprocess.run(["diskutil", "unmount", MOUNT_DIR], check=False, timeout=5)
+                subprocess.run(["diskutil", "unmount", mountDir], check=False, timeout=5)
             elif platform.system() == "Linux":
-                subprocess.run(["fusermount", "-u", MOUNT_DIR], check=False)
+                subprocess.run(["fusermount", "-u", mountDir], check=False)
             else:
-                print("Unsupported OS for auto-unmount.")
+                print("OS is not supported")
         except Exception as e:
-            log.warning(f"Failed to unmount: {e}")
-    sys.exit(0)
+            print(f"Failed to unmount due to error {e}")
+    sys.exit(0) #exit the program
 
-
-# attach sig handler
-signal.signal(signal.SIGINT, handle_exit)
+signal.signal(signal.SIGINT, handle_exit) #attaches handle_exit to SIGINT 
 signal.signal(signal.SIGTERM, handle_exit)
 
+class UFDRMount(Operations):
 
-class UFDRMount(LoggingMixIn, Operations):
-    """
-    FUSE filesystem that:
-     - Reads a .ufdr file
-     - Finds an embedded ZIP at the 'PK\x03\x04' signature
-     - Exposes everything before that as 'metadata.xml'
-     - Exposes the ZIP contents as subdirectories/files
-    """
+    def __init__(self, UFDRPath):
+        super().__init__() #constructor of parent class
+        self.UFDRPath = os.path.abspath(UFDRPath) #absolute path of UFDR file
+        if not os.path.isfile(self.UFDRPath): #throw error if not found
+            raise ValueError(f"UFDR file not found")
+        self.zipOffset = -1
+        self.XMLdata = b""
+        self.fileInfo = {}  #stores file paths
+        self.dirs = set()     #stores directory paths
+        self.parseUFDR() 
 
-    def __init__(self, ufdr_path):
-        super().__init__()
-        self.ufdr_path = os.path.abspath(ufdr_path)
-        if not os.path.isfile(self.ufdr_path):
-            raise ValueError(f"UFDR file not found: {self.ufdr_path}")
-
-        self.zip_offset = -1
-        self.xml_data = b""
-        self.files_info = {}  # path -> dict of metadata
-        self.dirs = set()     # set of directory paths
-
-        # ensure we parse the .ufdr structure
-        self._parse_ufdr()
-
-    def _parse_ufdr(self):
-        """
-        Scan the UFDR file for an embedded ZIP. The portion before the ZIP
-        is treated as 'metadata.xml'. The ZIP portion is read (but not extracted)
-        to populate the internal file tree.
-        """
-        log.info("Scanning UFDR file for embedded ZIP...")
-        with open(self.ufdr_path, "rb") as f:
-            # Read a chunk to find the ZIP signature
-            head = f.read(16384)  # read 16KB
-            signature = b"PK\x03\x04"
-            self.zip_offset = head.find(signature)
-            if self.zip_offset < 0:
-                raise RuntimeError("No ZIP signature found in UFDR file.")
-
-            # The bytes before the ZIP is 'metadata.xml'
-            self.xml_data = head[: self.zip_offset]
-
-            log.info(f"Found ZIP at offset {self.zip_offset}. Metadata size: {len(self.xml_data)}")
-            f.seek(self.zip_offset)
-
-            # read the ZIP 
-            with zipfile.ZipFile(f, "r") as z:
-                all_items = z.infolist()
-                log.info(f"ZIP has {len(all_items)} entries")
-
-                # track directories separately
-                self.dirs.add("/")
-                for info in all_items:
-                    # If a directory, record it in self.dirs.
-                    if info.is_dir() or info.filename.endswith("/"):
-                        dirpath = "/" + info.filename.rstrip("/")
+    def parseUFDR(self):
+        with open(self.UFDRPath, "rb") as f:
+            head = f.read(16384) #reads the first 16kb bc assuming that zip signature will be found in this area
+            signature = b"PK\x03\x04" #zip signature that marks the beginning of a local file header
+            self.zipOffset = head.find(signature) #finds the point in the provided zip file where the metadata ends + zip portion starts
+            if self.zipOffset < 0: #if it returns -1 => not found
+                raise RuntimeError(" ZIP signature not found in UFDR file.")
+            self.XMLData = head[: self.zipOffset]
+            print(f"Found ZIP at offset {self.zipOffset}")
+            f.seek(self.zipOffset) #move file ptr to the part where the zipfile starts
+            with zipfile.ZipFile(f, "r") as z: 
+                allItems = z.infolist() #list of all items in zipfile - just metadata, not actual content
+                numItems = len(allItems)
+                print(f"ZIP has {numItems} entries")
+                self.dirs.add("/") #add root directory
+                for info in allItems: #for every item
+                    if info.is_dir() or info.filename.endswith("/"): #if it's a directory, then it's added to self.dirs 
+                        dirpath = "/" + info.filename.rstrip("/") 
                         self.dirs.add(dirpath)
-                    else:
-                        # file
+                    else: #if it's a file, its metadata is added to self.fileInfo
                         filepath = "/" + info.filename
-                        self.files_info[filepath] = {
+                        self.fileInfo[filepath] = {
                             "filename": info.filename,
                             "size": info.file_size,
                             "mtime": info.date_time,
                         }
-                        # Mark parent directories
-                        self._ensure_parents(filepath)
-
-                # add 'metadata.xml' as a pseudo-file
-                self.files_info["/metadata.xml"] = {
-                    "filename": None,  # indicates it's not in the ZIP
-                    "size": len(self.xml_data),
+                        self.ensureParentsExist(filepath) #make sure all parent directories for this file are also added
+                self.fileInfo["/metadata.xml"] = { #create entry for metadata.xml file
+                    "filename": None,  
+                    "size": len(self.XMLData),
                     "mtime": (2023, 1, 1, 0, 0, 0),
-                    "is_metadata": True,
+                    "isMetadata": True,
                 }
+        numFiles = len(self.fileInfo)
+        numDirs = len(self.dirs)
+        print(f"Parsed {numFiles} files and {numDirs} directories in input UFDR file")
 
-        log.info(f"Parsed {len(self.files_info)} files and {len(self.dirs)} directories in UFDR")
-
-    def _ensure_parents(self, path):
-        """Given '/folder/subfolder/file.txt', register '/folder' and '/folder/subfolder' as dirs."""
-        parts = path.strip("/").split("/")
+    def ensureParentsExist(self, path):
+        parts = path.strip("/").split("/") #splits a path into its component folders and files
         cumulative = ""
-        for part in parts[:-1]:  # skip the final, which is the file
-            cumulative += "/" + part
+        for part in parts[:-1]: #except the filename, takes all the folders
+            cumulative += "/" + part #adds to the dir
             self.dirs.add(cumulative)
 
-    # ============= FUSE Methods =============
+#the following are FUSE core methods
+    def getattr(self, path, fh=None): #returns appropriate metadata, like stat()
+        if path == "/" or path in self.dirs: #checks if requested path is root directory or is in list of directories
+            return self.makeDirStat()
+        elif path in self.fileInfo: #checks if it's a known file
+            size = self.fileInfo[path]["size"]
+            return self.makeFileStat(size)
+        else: raise FuseOSError(errno.ENOENT) #raises error if the file doesn't exist in the filesystem
 
-    def getattr(self, path, fh=None):
-        """
-        Return file/dir metadata. If path is in dirs, treat it as a directory;
-        if path is in files_info, treat it as a file; else fallback check on disk
-        """
-        log.debug(f"getattr({path})")
+    def readdir(self, path, fh=None): #reading a directory, equivalent of ls
+        contents = [".", ".."] #this is the array that holds the contents of the directory
+        print(f"Reading path: ({path})") 
+        withSlash = path
+        if not withSlash.endswith("/"):
+            withSlash += "/"
+        for dir in self.dirs:
+            if dir.startswith(withSlash) and dir != path:
+                suffix = dir[len(withSlash) :] #get the remainder of the directory path – that's the part that's in this directory
+                if "/" not in suffix: #if it's a child directory, not a grandchild directory – because we want to only print children
+                    contents.append(suffix) #add the child directory to the array of contents
+        for file in self.fileInfo:
+            if file.startswith(withSlash) and file != path:
+                suffix = file[len(withSlash) :] 
+                if "/" not in suffix: #only get children files, not grandchildren!
+                    contents.append(suffix)
+        return set(contents)
 
-        if path == "/":
-            # Root: treat it like a directory
-            return self._make_dir_stat()
+    def read(self, path, size, offset, fh=None): #read a certain amount (size) of a file from the provided point (offset)
+        print(f"Reading file:({path}")
+        if path in self.fileInfo and self.fileInfo[path].get("isMetadata"): #if it is metadata, read from the XMLdata file
+            return self.XMLData[offset:offset+size]
+        if path in self.fileInfo and self.fileInfo[path]["filename"] is not None: #if it's not metadata and is an existing file
+            with open(self.UFDRPath, "rb") as file:
+                file.seek(self.zipOffset)
+                with zipfile.ZipFile(file, "r") as zipBuffer:
+                    filename = self.fileInfo[path]["filename"]
+                    with zipBuffer.open(filename) as superZipBuffer:
+                        if offset > 0:
+                            superZipBuffer.read(offset)  
+                        return superZipBuffer.read(size)
+        raise FuseOSError(errno.ENOENT)        
 
-        if path in self.dirs:
-            return self._make_dir_stat()
-
-        if path in self.files_info:
-            # It's a "virtual" file from the ZIP or the metadata chunk
-            size = self.files_info[path]["size"]
-            return self._make_file_stat(size)
-
-        # If there's some fallback? 
-        raise FuseOSError(errno.ENOENT)
-
-    def readdir(self, path, fh):
-        """
-        List children for a directory. find immediate subpaths
-        that share our directory prefix (plus one level).
-        """
-        log.debug(f"readdir({path})")
-        # '.' and '..' are standard
-        entries = [".", ".."]
-
-        # At root, anything that is top-level "/something"
-        # If at "/dir", then we want the next segment after "/dir/"
-        prefix = path
-        if not prefix.endswith("/"):
-            prefix += "/"
-
-        # For directories, gather direct children
-        # 1) Child directories
-        for d in self.dirs:
-            if d.startswith(prefix) and d != path:
-                suffix = d[len(prefix) :]
-                if "/" not in suffix:  # direct child, not deeper subdir
-                    entries.append(suffix)
-
-        # 2) Child files
-        for fpath in self.files_info:
-            if fpath.startswith(prefix) and fpath != path:
-                suffix = fpath[len(prefix) :]
-                if "/" not in suffix:
-                    entries.append(suffix)
-
-        return sorted(set(entries))
-
-    def read(self, path, size, offset, fh):
-        """
-        Return the requested slice of data from either:
-         - The 'metadata.xml' chunk
-         - The ZIP content 
-        """
-        log.debug(f"read({path}, size={size}, offset={offset})")
-
-        # Is it the pseudo metadata.xml file?
-        if path in self.files_info and self.files_info[path].get("is_metadata"):
-            return self.xml_data[offset : offset + size]
-
-        # If it's a file from the ZIP
-        if path in self.files_info and self.files_info[path]["filename"] is not None:
-            return self._read_from_zip(path, size, offset)
-
-        # Not found
-        raise FuseOSError(errno.ENOENT)
-
-    def _read_from_zip(self, path, size, offset):
-        """Helper to open the UFDR, seek to the ZIP offset, open the file in the ZIP, and read data."""
-        with open(self.ufdr_path, "rb") as f:
-            f.seek(self.zip_offset)
-            with zipfile.ZipFile(f, "r") as z:
-                filename = self.files_info[path]["filename"]
-                with z.open(filename) as zf:
-                    if offset > 0:
-                        zf.read(offset)  # skip to 'offset'
-                    return zf.read(size)
-
-    def open(self, path, flags):
-        log.debug(f"open({path}, flags={flags})")
-        if path not in self.files_info and path not in self.dirs:
+    def open(self, path, flags): #open a file or directory! This method merely checks if the path is valid and the file/directory exist. Then, the appropriate read method is called
+        print(f"Opening({path}")
+        if path not in self.fileInfo and path not in self.dirs: 
             raise FuseOSError(errno.ENOENT)
-        # 0 dummy handle
         return 0
 
-    ### HELPERS
-
     @staticmethod
-    def _make_file_stat(size):
-        """
-        Returns a dict of typical st_ fields for a read-only file.
-        """
+    def makeFileStat(size):
         import time
-        # set time to now
-        now = int(time.time())
+        currTime = int(time.time())
         return {
-            "st_mode": 0o100444,  # Regular file, read-only
+            "st_mode": 0o100444,  
             "st_size": size,
             "st_uid": os.getuid(),
             "st_gid": os.getgid(),
             "st_nlink": 1,
-            "st_atime": now,
-            "st_mtime": now,
-            "st_ctime": now,
+            "st_atime": currTime,
+            "st_mtime": currTime,
+            "st_ctime": currTime,
         }
 
     @staticmethod
-    def _make_dir_stat():
-        """
-        Returns a dict of typical st_ fields for a directory.
-        """
+    def makeDirStat():
         import time
-        now = int(time.time())
+        currTime = int(time.time())
         return {
-            "st_mode": 0o040555,  # directory, read/execute
+            "st_mode": 0o040555,  
             "st_size": 0,
             "st_uid": os.getuid(),
             "st_gid": os.getgid(),
             "st_nlink": 2,
-            "st_atime": now,
-            "st_mtime": now,
-            "st_ctime": now,
+            "st_atime": currTime,
+            "st_mtime": currTime,
+            "st_ctime": currTime,
         }
-
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: ufdr_mount.py <ufdr_file> <mount_dir>")
+        print("Please input 2 parameters: the UFDR file to be mounted and the mount point (path)")
         sys.exit(1)
-
-    ufdr_file = os.path.abspath(sys.argv[1])
-    global MOUNT_DIR
-    MOUNT_DIR = os.path.abspath(sys.argv[2])
-
-    if not os.path.exists(MOUNT_DIR):
-        os.makedirs(MOUNT_DIR)
-
-    if not os.path.isfile(ufdr_file):
-        print(f"Error: UFDR file {ufdr_file} not found.")
+    UFDRFile = os.path.abspath(sys.argv[1])
+    global mountDir
+    mountDir = os.path.abspath(sys.argv[2])
+    if not os.path.isfile(UFDRFile):
+        print(f"Error: UFDR file {UFDRFile} not found.")
         sys.exit(1)
-
-    print(f"Mounting {ufdr_file} at {MOUNT_DIR}")
-    print("Press Ctrl+C to unmount and exit.")
-
-    # FUSE in foreground
-    fuse = FUSE(UFDRMount(ufdr_file), MOUNT_DIR, foreground=True, ro=True, allow_other=True)
-
+    if not os.path.exists(mountDir): #if there's no folder, we make a folder! 
+        os.makedirs(mountDir)
+    print(f"Beginning process of mounting {UFDRFile} at {mountDir}, press Ctrl+C to unmount and exit")
+    fuse = FUSE(UFDRMount(UFDRFile), mountDir, foreground=True, ro=True, allow_other=True)
 
 if __name__ == "__main__":
     main()
-
