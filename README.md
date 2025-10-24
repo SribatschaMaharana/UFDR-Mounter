@@ -96,6 +96,8 @@ The server will run on http://127.0.0.1:5000 by default.
      or a short name like `test1` (which will be mounted inside the repo's `mnt/` folder).
    - **Windows**:  
      Enter a valid **drive letter** (e.g., `M:` or `R:`) as the mount point.
+5. View success message on RescueBox.
+6. Navigate to the mount point and interact with the virtual filesystem (open files, open directories, read files).
 
 #### Registering
 
