@@ -98,7 +98,8 @@ The server will run on http://127.0.0.1:5000 by default.
      Enter a valid **drive letter** (e.g., `M:` or `R:`) as the mount point.
 5. View success message on RescueBox.
 6. Navigate to the mount point and interact with the virtual filesystem (open files, open directories, read files).
-
+7. To unmount, press CTRL+C or right-click and eject the drive.
+   
 #### Registering
 
 ![Register](./resources/Register.png)
