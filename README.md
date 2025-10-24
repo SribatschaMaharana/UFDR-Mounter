@@ -89,7 +89,7 @@ The server will run on http://127.0.0.1:5000 by default.
 
 1. Open the RescueBox interface.
 2. Register the model with the server's IP address (`127.0.0.1`) and port (`5000`).
-3. Upload the `.ufdr` file to the **UFDR Mounter Service** interface.
+3. Upload the `.ufdr` file to the **UFDR Mounter Service** interface. Note: you can also upload a zip file (the one in testdata or your own).
 4. Specify the mount point:
    - **Linux/macOS**:  
      Use an absolute path (e.g., `/mnt/test1`)  
